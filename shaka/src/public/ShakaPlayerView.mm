@@ -28,6 +28,8 @@
   CALayer *_avPlayerLayer;
   ShakaPlayer *_player;
   shaka::VideoFillMode _gravity;
+  shaka::Rational<uint32_t> _aspect_ratio;
+  shaka::ShakaRect<uint32_t> _image_bounds;
 
   NSMutableDictionary<NSValue *, NSSet<CALayer *> *> *_cues;
 }
@@ -121,6 +123,11 @@
 
   _gravity = shaka::VideoFillMode::MaintainRatio;
   _cues = [[NSMutableDictionary alloc] init];
+
+  [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
+  [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(orientationChanged:)
+                                               name:UIDeviceOrientationDidChangeNotification
+                                             object:[UIDevice currentDevice]];
 }
 
 - (ShakaPlayer *)player {
@@ -165,13 +172,15 @@
     return;
   }
 
-  shaka::Rational<uint32_t> aspect_ratio;
-  if (CGImageRef image = _player.videoRenderer->Render(nullptr, &aspect_ratio)) {
+  if (CGImageRef image = _player.videoRenderer->Render(nullptr, &_aspect_ratio)) {
     _imageLayer.contents = (__bridge_transfer id)image;
 
+    if (![self layoutImage])
+      return;
+
     // Fit image in frame.
-    shaka::ShakaRect<uint32_t> image_bounds = {0, 0, CGImageGetWidth(image),
-                                               CGImageGetHeight(image)};
+    _image_bounds = {0, 0, CGImageGetWidth(image),
+                           CGImageGetHeight(image)};
     shaka::ShakaRect<uint32_t> dest_bounds = {
         0,
         0,
@@ -180,11 +189,11 @@
     };
     shaka::ShakaRect<uint32_t> src;
     shaka::ShakaRect<uint32_t> dest;
-    shaka::FitVideoToRegion(image_bounds, dest_bounds, aspect_ratio,
+    shaka::FitVideoToRegion(_image_bounds, dest_bounds, _aspect_ratio,
                             _player.videoRenderer->fill_mode(), &src, &dest);
     _imageLayer.contentsRect = CGRectMake(
-        static_cast<CGFloat>(src.x) / image_bounds.w, static_cast<CGFloat>(src.y) / image_bounds.h,
-        static_cast<CGFloat>(src.w) / image_bounds.w, static_cast<CGFloat>(src.h) / image_bounds.h);
+        static_cast<CGFloat>(src.x) / _image_bounds.w, static_cast<CGFloat>(src.y) / _image_bounds.h,
+        static_cast<CGFloat>(src.w) / _image_bounds.w, static_cast<CGFloat>(src.h) / _image_bounds.h);
     _imageLayer.frame = CGRectMake(dest.x, dest.y, dest.w, dest.h);
   }
 }
@@ -298,6 +307,30 @@
     cueLayer.frame = CGRectMake(cueLayer.frame.origin.x, y, size.width, size.height);
   }
   return YES;
+}
+
+- (bool) layoutImage {
+    return _imageLayer.contents != nil;
+}
+
+- (void) orientationChanged:(NSNotification *)note {
+  if (![self layoutImage]) {
+    return;
+  }
+  shaka::ShakaRect<uint32_t> dest_bounds = {
+    0,
+    0,
+    static_cast<uint32_t>(self.bounds.size.width),
+    static_cast<uint32_t>(self.bounds.size.height),
+  };
+  shaka::ShakaRect<uint32_t> src;
+  shaka::ShakaRect<uint32_t> dest;
+  shaka::FitVideoToRegion(_image_bounds, dest_bounds, _aspect_ratio,
+                          _player.videoRenderer->fill_mode(), &src, &dest);
+  _imageLayer.contentsRect = CGRectMake(
+    static_cast<CGFloat>(src.x) / _image_bounds.w, static_cast<CGFloat>(src.y) / _image_bounds.h,
+    static_cast<CGFloat>(src.w) / _image_bounds.w, static_cast<CGFloat>(src.h) / _image_bounds.h);
+  _imageLayer.frame = CGRectMake(dest.x, dest.y, dest.w, dest.h);
 }
 
 @end
