@@ -290,6 +290,16 @@ void AudioRendererCommon::ThreadMain() {
         clock_->SleepSeconds(delay);
         if (shutdown_)
           return;
+        // Mute audio when player is not playing after sleep
+        const bool is_playing =
+                player_->PlaybackRate() == 1 &&
+                player_->PlaybackState() == VideoPlaybackState::Playing;
+        SetDeviceState(is_playing);
+        if (!is_playing) {
+            std::unique_lock<Mutex> lock(mutex_);
+            on_play_.ResetAndWaitWhileUnlocked(lock);
+            continue;
+        }
         time = player_->CurrentTime();
       }
 
