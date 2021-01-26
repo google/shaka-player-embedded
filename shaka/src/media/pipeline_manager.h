@@ -19,6 +19,7 @@
 #include <thread>
 
 #include "shaka/media/media_player.h"
+#include "shaka/src/mapping/promise.h"
 #include "src/debug/mutex.h"
 #include "src/util/clock.h"
 
@@ -73,7 +74,7 @@ class PipelineManager {
   virtual void SetPlaybackRate(double rate);
 
   /** Starts playing the video. */
-  virtual void Play();
+  virtual Promise Play();
 
   /** Pauses the video. */
   virtual void Pause();

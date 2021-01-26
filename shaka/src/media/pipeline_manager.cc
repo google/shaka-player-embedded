@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "src/util/utils.h"
+#include "src/js/js_error.h"
 
 namespace shaka {
 namespace media {
@@ -155,6 +156,7 @@ void PipelineManager::SetPlaybackRate(double rate) {
 
 void PipelineManager::Play() {
   VideoPlaybackState new_status = VideoPlaybackState::Initializing;
+  try
   {
     std::unique_lock<SharedMutex> lock(mutex_);
     SyncPoint();
@@ -171,6 +173,10 @@ void PipelineManager::Play() {
       prev_media_time_ = 0;
       new_status = status_ = VideoPlaybackState::Seeking;
     }
+  }
+  catch (const js::JsError& e)
+  {
+    return Promise::Rejected(e);
   }
   if (new_status != VideoPlaybackState::Initializing)
     on_status_changed_(new_status);
